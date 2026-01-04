@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>earnnepal App</title>
+<style>
+body{font-family:Arial;margin:0;padding-bottom:70px;background:#f4f4f4}
+.container{max-width:500px;margin:auto;padding:15px}
+.step{display:none}
+.step.active{display:block}
+video{width:100%;border-radius:8px;margin-bottom:8px}
+input,button{width:100%;padding:8px;margin:6px 0}
+button{background:#4CAF50;color:#fff;border:none;border-radius:5px}
+button.danger{background:#e53935}
+.video-item,.admin-box{border:1px solid #ddd;padding:8px;border-radius:8px;margin-bottom:10px;background:#fff}
+.bottom-menu{position:fixed;bottom:0;width:100%;background:#333;display:flex;justify-content:space-around;padding:10px 0}
+.bottom-menu a{color:white;cursor:pointer}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h2>earnnepal</h2>
+
+<!-- HOME -->
+<div class="step active" id="step1">
+<h3>Home</h3>
+<div id="homeVideos"></div>
+</div>
+
+<!-- UPLOAD -->
+<div class="step" id="step4">
+<h3>Upload</h3>
+<form id="uploadForm">
+<input type="file" id="videoFile" accept="video/*" required>
+<input type="text" id="videoTitle" placeholder="Video title" required>
+<button>Upload</button>
+</form>
+<div id="uploadStatus"></div>
+<!-- Upload preview videos show here -->
+<div id="uploadPreview"></div>
+</div>
+
+<!-- PROFILE -->
+<div class="step" id="step6">
+<h3>Me / Profile</h3>
+
+<div id="loginSection">
+<form id="loginForm">
+<input type="text" id="loginUser" placeholder="Email" required>
+<input type="password" id="loginPass" placeholder="Password" required>
+<button>Login</button>
+</form>
+</div>
+
+<div id="profileSection" style="display:none">
+<p>Name: <span id="userName"></span></p>
+<p>Points: <span id="userPoints">0</span></p>
+<p>Coins: <span id="userCoins">0</span></p>
+<p>NPR Balance: <span id="userBalance">0</span></p>
+<button onclick="logout()">Logout</button>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel" style="display:none">
+<h3>👑 Admin – All Users</h3>
+<div id="allUsers"></div>
+
+<h3>💰 Withdraw Requests</h3>
+<div id="adminWithdraws"></div>
+</div>
+</div>
+
+<!-- WITHDRAW -->
+<div class="step" id="step8">
+<h3>Withdraw</h3>
+<form id="withdrawForm">
+<input type="number" id="withdrawAmount" placeholder="Min 100" min="100" required>
+<input type="text" id="withdrawEsewa" placeholder="eSewa Number" required>
+<button>Submit</button>
+</form>
+<div id="withdrawStatus"></div>
+</div>
+
+<!-- MENU -->
+<div class="bottom-menu">
+<a onclick="showStep(1)">Home</a>
+<a onclick="showStep(4)">Upload</a>
+<a onclick="showStep(6)">Me</a>
+<a onclick="showStep(8)">Withdraw</a>
+</div>
+
+<script>
+// SPA
+function showStep(n){
+document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+document.getElementById('step'+n).classList.add('active');
+}
+
+// DATA
+let videos=[
+{src:'static/videos/v1.mp4',title:'Short 1',views:0,likes:0},
+{src:'static/videos/v2.mp4',title:'Short 2',views:0,likes:0}
+];
+let user=null;
+let allUsersData=[];
+let withdrawRequests=[];
+let watchTimers=new Map();
+
+// HOME
+function renderHome(){
+const home=document.getElementById("homeVideos");
+home.innerHTML='';
+videos.forEach((v,i)=>{
+home.innerHTML+=`
+<div class="video-item">
+<p>${v.title}</p>
+<video src="${v.src}" controls muted data-index="${i}"></video>
+<p>Views: <span class="viewCount">${v.views}</span> | Likes: <span class="likeCount">${v.likes}</span></p>
+<button onclick="likeVideo(${i})">Like</button>
+</div>`;
+});
+attachWatch();
+}
+renderHome();
+
+// WATCH POINT + VIEW
+function attachWatch(){
+document.querySelectorAll('#homeVideos video').forEach((v)=>{
+let i = v.dataset.index;
+v.onplay=()=>{
+if(!v.dataset.viewed){
+videos[i].views++;
+v.dataset.viewed="1";
+let viewSpan=v.parentElement.querySelector(".viewCount");
+viewSpan.innerText=videos[i].views;
+}
+startWatch(v);
+};
+v.onpause=()=>stopWatch(v);
+v.onended=()=>stopWatch(v);
+});
+}
+
+function startWatch(video){
+if(!user || watchTimers.has(video)) return;
+let t=setInterval(()=>{
+user.points+=5;
+user.coins=Math.floor(user.points/1000000*100);
+user.balance=user.coins/100;
+updateProfile();
+},1000);
+watchTimers.set(video,t);
+}
+function stopWatch(video){
+if(watchTimers.has(video)){
+clearInterval(watchTimers.get(video));
+watchTimers.delete(video);
+}
+}
+
+// LIKE
+function likeVideo(i){
+if(!user){alert("Login first");return;}
+videos[i].likes++;
+let likeSpan=document.querySelectorAll("#homeVideos .video-item")[i].querySelector(".likeCount");
+likeSpan.innerText=videos[i].likes;
+}
+
+// LOGIN
+loginForm.onsubmit=e=>{
+e.preventDefault();
+if(loginUser.value==="admin@earnneal.com" && loginPass.value==="1234567890"){
+loginSection.style.display="none";
+adminPanel.style.display="block";
+renderAdmin();
+return;
+}
+user={name:loginUser.value,points:0,coins:0,balance:0};
+allUsersData.push(user);
+loginSection.style.display="none";
+profileSection.style.display="block";
+updateProfile();
+};
+
+// PROFILE UPDATE
+function updateProfile(){
+userName.innerText=user.name;
+userPoints.innerText=user.points;
+userCoins.innerText=user.coins;
+userBalance.innerText=user.balance;
+}
+
+// ADMIN RENDER
+function renderAdmin(){
+document.getElementById("allUsers").innerHTML =
+allUsersData.map(u=>`
+<div class="admin-box">
+<p>Email: ${u.name}</p>
+<p>Points: ${u.points}</p>
+<p>Coins: ${u.coins}</p>
+<p>Balance: NPR ${u.balance}</p>
+</div>`).join('');
+
+document.getElementById("adminWithdraws").innerHTML =
+withdrawRequests.map(w=>`
+<div class="admin-box">
+<p>User: ${w.user}</p>
+<p>Amount: NPR ${w.amount}</p>
+<p>eSewa: ${w.esewa}</p>
+<p>Status: Pending</p>
+</div>`).join('');
+}
+
+// UPLOAD + PREVIEW BELOW BUTTON
+uploadForm.onsubmit=e=>{
+e.preventDefault();
+let file=videoFile.files[0];
+if(!file) return;
+
+let url=URL.createObjectURL(file);
+let vid={src:url,title:videoTitle.value,views:0,likes:0};
+videos.unshift(vid);
+
+// Reset form
+uploadForm.reset();
+uploadStatus.innerHTML=`<p style='color:green'>Upload successful!</p>`;
+
+// === Show video preview BELOW upload button ===
+let previewDiv = document.getElementById("uploadPreview");
+previewDiv.innerHTML = `
+<div class="video-item">
+<p>${vid.title}</p>
+<video src="${vid.src}" controls muted data-index="0"></video>
+<p>Views: <span class="viewCount">${vid.views}</span> | Likes: <span class="likeCount">${vid.likes}</span></p>
+<button onclick="likeUploadedVideo()">Like</button>
+</div>
+`;
+
+// Attach watch for preview
+let videoEl = previewDiv.querySelector("video");
+videoEl.onplay = () => startWatchPreview(videoEl, vid);
+videoEl.onpause = () => stopWatch(videoEl);
+videoEl.onended = () => stopWatch(videoEl);
+
+// Update Home too
+renderHome();
+
+// Optional: scroll to preview
+previewDiv.scrollIntoView({ behavior: "smooth" });
+};
+
+// LIKE for uploaded preview video
+function likeUploadedVideo(){
+if(!user){alert("Login first"); return;}
+let previewDiv = document.getElementById("uploadPreview");
+let videoItem = videos[0]; // top video
+videoItem.likes++;
+previewDiv.querySelector(".likeCount").innerText = videoItem.likes;
+}
+
+// Watch points for uploaded preview
+function startWatchPreview(videoEl, videoItem){
+if(!user || watchTimers.has(videoEl)) return;
+let t = setInterval(()=>{
+user.points += 5;
+user.coins = Math.floor(user.points/1000000*100);
+user.balance = user.coins/100;
+updateProfile();
+
+// update views count for preview
+if(!videoEl.dataset.viewed){
+videoItem.views++;
+videoEl.dataset.viewed = "1";
+videoEl.parentElement.querySelector(".viewCount").innerText = videoItem.views;
+}
+},1000);
+watchTimers.set(videoEl, t);
+}
+
+// WITHDRAW
+withdrawForm.onsubmit=e=>{
+e.preventDefault();
+withdrawRequests.push({
+user:user.name,
+amount:withdrawAmount.value,
+esewa:withdrawEsewa.value
+});
+withdrawStatus.innerHTML="<p style='color:orange'>Pending (Sent to Admin)</p>";
+withdrawForm.reset();
+};
+
+// LOGOUT
+function logout(){location.reload();}
+</script>
+</body>
+</html>
